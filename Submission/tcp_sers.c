@@ -23,7 +23,8 @@ extern int DATALEN_ARR[];
 extern float ERRPROB_ARR[];
 extern volatile int trial_num; 
 void str_ser(int sockfd, int datalen);                                                        
-int send_ack(int sockfd);
+int send_ack(int sockfd, struct sockaddr *addr, int addrlen);
+int compareFile(char path1[], char path2[], int * line, int * col);
 
 int is_simulated_failure() {
 	float prob = ERRPROB_ARR[trial_num];
@@ -50,7 +51,7 @@ int main(void)
 //	char *buf;
 	pid_t pid;
 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);          //create socket
+	sockfd = socket(AF_INET, SOCK_DGRAM, 0);          //create socket
 	if (sockfd <0)
 	{
 		printf("error in socket!");
@@ -58,7 +59,7 @@ int main(void)
 	}
 	
 	my_addr.sin_family = AF_INET;
-	my_addr.sin_port = htons(MYTCP_PORT);
+	my_addr.sin_port = htons(MYUDP_PORT);
 	my_addr.sin_addr.s_addr = htonl(INADDR_ANY);//inet_addr("172.0.0.1");
 	bzero(&(my_addr.sin_zero), 8);
 	ret = bind(sockfd, (struct sockaddr *) &my_addr, sizeof(struct sockaddr));                //bind socket
@@ -119,8 +120,13 @@ void str_ser(int sockfd, int datalen)
 	int random;
 	int success = 0;
 	
+	struct sockaddr_in addr;
+	int len = sizeof (struct sockaddr_in);
 	printf("receiving data!\n");
 
+	char file_in[100] = "myfile.txt";
+	char file_out[100] = "myTCPreceive.txt";
+	int line, col;
 	while(!end)
 	{
 		// Simulates probability of failure of transmission by (10-PROB)/10 chance of failure
@@ -128,7 +134,7 @@ void str_ser(int sockfd, int datalen)
 			continue;
 		}
 
-		n= recv(sockfd, &recvs, DATALEN_ARR[trial_num], 0);
+		n= recvfrom(sockfd, &recvs, DATALEN_ARR[trial_num], 0, (struct sockaddr *)&addr, &len);
 
 		if (n==-1)                                   //receive the packet
 		{
@@ -148,7 +154,7 @@ void str_ser(int sockfd, int datalen)
 		lseek += n;
 
 		// After receiving a frame, send an acknowledgement.
-		while (!send_ack(sockfd));
+		while (!send_ack(sockfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)));
 	}
 	
 
@@ -159,18 +165,73 @@ void str_ser(int sockfd, int datalen)
 	}
 	fwrite (buf , 1 , lseek , fp);					//write data into file
 	fclose(fp);
+
+	if (compareFile(file_in, file_out, &line, &col) != 0) {
+		printf("Diff found in line %d col %d!!!!\n", line, col);
+	} else {
+
+	}
 	printf("a file has been successfully received!\nthe total data received is %d bytes\n", (int)lseek);
 }
 
-int send_ack(int sockfd) {
+int send_ack(int sockfd, struct sockaddr *addr, int addrlen) {
 	// After receiving a frame, send an acknowledgement.
 	struct ack_so ack;
 	ack.num = 1;
 	ack.len = 0;
 	int n;
-	if ((n = send(sockfd, &ack, 2, 0))==-1) {
+	if ((n = sendto(sockfd, &ack, 2, 0, addr, addrlen))==-1) {
 		printf("send error!");
 		return 0;
 	} 
 	else return 1;
+}
+
+int compareFile(char path1[], char path2[], int * line, int * col)
+{
+    char ch1, ch2;
+
+    *line = 1;
+    *col  = 0;
+
+	/*  Open all files to compare */
+    FILE *fPtr1 = fopen(path1, "r");
+    FILE *fPtr2 = fopen(path2, "r");
+
+    /* fopen() return NULL if unable to open file in given mode. */
+    if (fPtr1 == NULL || fPtr2 == NULL)
+    {
+        /* Unable to open file hence exit */
+        printf("\nUnable to open file.\n");
+        printf("Please check whether file exists and you have read privilege.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    do
+    {
+        // Input character from both files
+        ch1 = fgetc(fPtr1);
+        ch2 = fgetc(fPtr2);
+        
+        // Increment line 
+        if (ch1 == '\n')
+        {
+            *line += 1;
+            *col = 0;
+        }
+
+        // If characters are not same then return -1
+        if (ch1 != ch2)
+            return -1;
+
+        *col  += 1;
+
+    } while (ch1 != EOF && ch2 != EOF);
+
+
+    /* If both files have reached end */
+    if (ch1 == EOF && ch2 == EOF)
+        return 0;
+    else
+        return -1;
 }

@@ -4,7 +4,7 @@ tcp_client.c: the source file of the client in tcp transmission
 
 #include "headsock.h"
 
-float str_cli(FILE *fp, int sockfd, long *len, int);                       //transmission function
+float str_cli(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, long *len, int datalen);                       //transmission function
 void tv_sub(struct  timeval *out, struct timeval *in);	    //calcu the time interval between out and in
 
 
@@ -43,6 +43,7 @@ int main(int argc, char **argv)
 
 	if (argc != 2) {
 		printf("parameters not match");
+		exit(0);
 	}
 
 	sh = gethostbyname(argv[1]);	                                       //get host's information
@@ -50,7 +51,8 @@ int main(int argc, char **argv)
 		printf("error when gethostby name");
 		exit(0);
 	}
-
+	
+	addrs = (struct in_addr **)sh->h_addr_list;
 	printf("canonical name: %s\n", sh->h_name);					//print the remote host's information
 	for (pptr=sh->h_aliases; *pptr != NULL; pptr++)
 		printf("the aliases name is: %s\n", *pptr);
@@ -64,15 +66,10 @@ int main(int argc, char **argv)
 		break;
 	}
         
-	addrs = (struct in_addr **)sh->h_addr_list;
-	// sockfd = socket(AF_INET, SOCK_STREAM, 0);                           //create the socket
-	// if (sockfd <0)
-	// {
-	// 	printf("error in socket");
-	// 	exit(1);
-	// }
+	
+
 	ser_addr.sin_family = AF_INET;                                                      
-	ser_addr.sin_port = htons(MYTCP_PORT);
+	ser_addr.sin_port = htons(MYUDP_PORT);
 	memcpy(&(ser_addr.sin_addr.s_addr), *addrs, sizeof(struct in_addr));
 	bzero(&(ser_addr.sin_zero), 8);
 
@@ -81,18 +78,12 @@ int main(int argc, char **argv)
 		for (int i = 0; i < EXPERIMENT_REPEAT_NUM; i++) {
 			//connect the socket with the host
 			//create the socket
-			sockfd = socket(AF_INET, SOCK_STREAM, 0);           
+			sockfd = socket(AF_INET, SOCK_DGRAM, 0);           
 			if (sockfd <0)
 			{
 				printf("error in socket");
 				exit(1);
 			}                
-			ret = connect(sockfd, (struct sockaddr *)&ser_addr, sizeof(struct sockaddr));         
-			if (ret != 0) {
-				printf ("connection failed\n"); 
-				close(sockfd); 
-				exit(1);
-			}
 			
 			if((fp = fopen ("myfile.txt","r+t")) == NULL)
 			{
@@ -100,7 +91,7 @@ int main(int argc, char **argv)
 				exit(0);
 			}
 			//perform the transmission and receiving
-			ti = str_cli(fp, sockfd, &len, DATALEN_ARR[trial_num]);     
+			ti = str_cli(fp, sockfd, (struct sockaddr *)&ser_addr, sizeof(struct sockaddr_in), &len, DATALEN_ARR[trial_num]);     
 			//caculate the average transmission rate                  
 			rt = (len/(float)ti);                                         
 			printf("Time(ms) : %.3f, Data sent(byte): %d\nData rate: %f (Kbytes/s)\n", ti, (int)len, rt);
@@ -131,7 +122,7 @@ int main(int argc, char **argv)
 	exit(0);
 }
 
-float str_cli(FILE *fp, int sockfd, long *len, int datalen)
+float str_cli(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, long *len, int datalen)
 {
 	char *buf;
 	long lsize, ci;
@@ -166,7 +157,7 @@ float str_cli(FILE *fp, int sockfd, long *len, int datalen)
 		else 
 			slen = DATALEN_ARR[trial_num];
 		memcpy(sends, (buf+ci), slen);
-		n = send(sockfd, &sends, slen, 0);
+		n = sendto(sockfd, &sends, slen, 0, addr, addrlen);
 		if(n == -1) {
 			printf("send error!");								//send the data
 			exit(1);
