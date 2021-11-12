@@ -43,13 +43,8 @@ int is_simulated_failure() {
 int main(void)
 {
 	srand(time(NULL));   // Initialization, should only be called once.
-	int sockfd, con_fd, ret;
+	int sockfd, ret;
 	struct sockaddr_in my_addr;
-	struct sockaddr_in their_addr;
-	int sin_size;
-
-//	char *buf;
-	pid_t pid;
 
 	sockfd = socket(AF_INET, SOCK_DGRAM, 0);          //create socket
 	if (sockfd <0)
@@ -60,7 +55,7 @@ int main(void)
 	
 	my_addr.sin_family = AF_INET;
 	my_addr.sin_port = htons(MYUDP_PORT);
-	my_addr.sin_addr.s_addr = htonl(INADDR_ANY);//inet_addr("172.0.0.1");
+	my_addr.sin_addr.s_addr = INADDR_ANY;//inet_addr("172.0.0.1");
 	bzero(&(my_addr.sin_zero), 8);
 	ret = bind(sockfd, (struct sockaddr *) &my_addr, sizeof(struct sockaddr));                //bind socket
 	if (ret <0)
@@ -68,33 +63,14 @@ int main(void)
 		printf("error in binding");
 		exit(1);
 	}
-	
-	ret = listen(sockfd, BACKLOG);                              //listen
-	if (ret <0) {
-		printf("error in listening");
-		exit(1);
-	}
 
 	int count = 0;
 	while (1)
 	{
 		printf("waiting for data\n");
-		sin_size = sizeof (struct sockaddr_in);
-		con_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);            //accept the packet
-		if (con_fd <0)
-		{
-			printf("error in accept\n");
-			exit(1);
-		}
 
-		if ((pid = fork())==0)                                         // creat acception process
-		{
-			close(sockfd);
-			str_ser(con_fd, DATALEN_ARR[trial_num]);                                          //receive packet and response
-			close(con_fd);
-			exit(0);
-		}
-		else close(con_fd);                                         //parent process
+
+		str_ser(sockfd, DATALEN_ARR[trial_num]);                                          //receive packet and response
 
 		count++;
 		if (count >= EXPERIMENT_REPEAT_NUM) {
@@ -133,13 +109,12 @@ void str_ser(int sockfd, int datalen)
 		if (is_simulated_failure()) {
 			continue;
 		}
-
+		printf("hi\n");
 		n= recvfrom(sockfd, &recvs, DATALEN_ARR[trial_num], 0, (struct sockaddr *)&addr, &len);
 
 		if (n==-1)                                   //receive the packet
 		{
 			printf("error when receiving\n");
-			exit(1);
 		}
 
 		printf("Received byte length is %d\n", n);
@@ -169,7 +144,7 @@ void str_ser(int sockfd, int datalen)
 	if (compareFile(file_in, file_out, &line, &col) != 0) {
 		printf("Diff found in line %d col %d!!!!\n", line, col);
 	} else {
-
+		printf("No file loss!!!\n");
 	}
 	printf("a file has been successfully received!\nthe total data received is %d bytes\n", (int)lseek);
 }
@@ -210,7 +185,7 @@ int compareFile(char path1[], char path2[], int * line, int * col)
     do
     {
         // Input character from both files
-        ch1 = fgetc(fPtr1);
+        ch1 = fgetc(fPtr1);	
         ch2 = fgetc(fPtr2);
         
         // Increment line 

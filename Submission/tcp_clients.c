@@ -21,13 +21,30 @@ float rt_avg_ls[MAX_TRIAL_NUM];
 const char* print_experiment_result = 
 	"Experiment Trial %d, ( Error Prob:%.3f ), ( Data Unit:%.3d ):\n\t\tAvg. Transfer Time: %.3f, Avg. Throughput: %.3f\n\n";
 
-float avg(float arr[]) {
+void print_arr(float arr[]) {
+	printf(" \n{");
+	for (int i = 0; i < sizeof(arr)/sizeof(arr[0]); i++) {
+		printf("%f, ", arr[i]);
+	}
+	printf(" }\n");
+}
+
+float mean(float arr[]) {
 	float sum = 0;
 	for (int i = 0; i < EXPERIMENT_REPEAT_NUM; i++) {
 		sum += arr[i];
 	}
 	printf("dasdasd %f\n", sum/EXPERIMENT_REPEAT_NUM);
 	return sum/EXPERIMENT_REPEAT_NUM;
+}
+
+float harmonic_mean(float arr[]) {
+	float sum = 0;
+	for (int i = 0; i < EXPERIMENT_REPEAT_NUM; i++) {
+		sum += 1.0/arr[i];
+	}
+	printf("dasdasd %f\n", sum/EXPERIMENT_REPEAT_NUM);
+	return EXPERIMENT_REPEAT_NUM/sum;
 }
 
 int main(int argc, char **argv)
@@ -104,12 +121,15 @@ int main(int argc, char **argv)
 
 			sleep(1);
 		}
-		ti_avg_ls[trial_num] = avg(ti_ls);
-		rt_avg_ls[trial_num] = avg(rt_ls);
+		print_arr(ti_ls);
+		print_arr(rt_ls);
+		ti_avg_ls[trial_num] = mean(ti_ls);
+		rt_avg_ls[trial_num] = mean(rt_ls);
 		trial_num += 1;
 		if (trial_num == MAX_TRIAL_NUM) break; 
 	}
 //}	
+
 	printf("\n\nExperiment Results\n===================\n");
 	for (int j = 0; j < MAX_TRIAL_NUM; j++) {
 		printf(print_experiment_result, j+1, ERRPROB_ARR[j], DATALEN_ARR[j], ti_avg_ls[j], rt_avg_ls[j]);
@@ -139,14 +159,13 @@ float str_cli(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, long *le
 	rewind (fp);
 	printf("The file length is %d bytes\n", (int)lsize);
 	printf("the packet length is %d bytes\n", datalen);
-
+	
 	// allocate memory to contain the whole file.
 	buf = (char *) malloc (lsize);
 	if (buf == NULL) exit (2);
 
   // copy the file into the buffer.
 	fread (buf,1,lsize,fp);
-
   /*** the whole file is loaded in the buffer. ***/
 	buf[lsize] ='\0';									//append the end byte
 	gettimeofday(&sendt, NULL);							//get the current time
@@ -157,7 +176,9 @@ float str_cli(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, long *le
 		else 
 			slen = DATALEN_ARR[trial_num];
 		memcpy(sends, (buf+ci), slen);
+		
 		n = sendto(sockfd, &sends, slen, 0, addr, addrlen);
+		
 		if(n == -1) {
 			printf("send error!");								//send the data
 			exit(1);
@@ -167,10 +188,12 @@ float str_cli(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, long *le
 		// Wait for acknowledgement before sending the next frame.
 		ack.num = 0;
 		ack.len = 0;
+		struct sockaddr_in addr;
+		int len = sizeof (struct sockaddr_in);
 		while (!(((ack.num == 1) && (ack.len == 0))))
 		{
-			printf("waiting for acknowledgement...");
-			if ((n= recv(sockfd, &ack, 2, 0))==-1)                                   //receive the ack
+			printf("waiting for acknowledgement...\n");
+			if ((n= recvfrom(sockfd, &ack, 2, 0, (struct sockaddr *)&addr, &len))==-1)                                   //receive the ack
 			{
 				printf("error when receiving\n");
 				exit(1);
