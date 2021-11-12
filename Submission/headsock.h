@@ -20,22 +20,11 @@
 #define BUFSIZE 60000
 #define PACKLEN 508
 #define HEADLEN 8
-#define MAX_TRIAL_NUM 16
 #define EXPERIMENT_REPEAT_NUM 100
-// #define MAX_TRIAL_NUM 2
-// #define EXPERIMENT_REPEAT_NUM 2
 
 volatile int trial_num = 0;
 
 int DATALEN_ARR[] = {
-    500,
-    500,
-    500,
-    500,
-    500,
-    500,
-    500,
-    500,
     250,
     500,
     750, 
@@ -55,15 +44,12 @@ float ERRPROB_ARR[] = {
     0.625,
     0.75,
     0.875,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
 };
+
+const int datalenarr_len = sizeof(DATALEN_ARR)/sizeof(float);
+const int errprobarr_len = sizeof(ERRPROB_ARR)/sizeof(float);
+const int MAX_TRIAL_NUM = datalenarr_len * errprobarr_len;
+
 
 // float ERRPROB_ARR[] = {
 //     0.0001,

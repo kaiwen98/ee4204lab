@@ -15,15 +15,15 @@ extern volatile int trial_num;
 float ti_ls[EXPERIMENT_REPEAT_NUM];
 float rt_ls[EXPERIMENT_REPEAT_NUM];
 
-float ti_avg_ls[MAX_TRIAL_NUM];
-float rt_avg_ls[MAX_TRIAL_NUM];
+float *ti_avg_ls;
+float *rt_avg_ls; 
 
 const char* print_experiment_result = 
 	"Experiment Trial %d, ( Error Prob:%.3f ), ( Data Unit:%.3d ):\n\t\tAvg. Transfer Time: %.3f, Avg. Throughput: %.3f\n\n";
 
-void print_arr(float arr[]) {
+void print_arr(float arr[], size_t size) {
 	printf(" \n{");
-	for (int i = 0; i < sizeof(arr)/sizeof(arr[0]); i++) {
+	for (int i = 0; i < size; i++) {
 		printf("%f, ", arr[i]);
 	}
 	printf(" }\n");
@@ -34,7 +34,6 @@ float mean(float arr[]) {
 	for (int i = 0; i < EXPERIMENT_REPEAT_NUM; i++) {
 		sum += arr[i];
 	}
-	printf("dasdasd %f\n", sum/EXPERIMENT_REPEAT_NUM);
 	return sum/EXPERIMENT_REPEAT_NUM;
 }
 
@@ -43,7 +42,6 @@ float harmonic_mean(float arr[]) {
 	for (int i = 0; i < EXPERIMENT_REPEAT_NUM; i++) {
 		sum += 1.0/arr[i];
 	}
-	printf("dasdasd %f\n", sum/EXPERIMENT_REPEAT_NUM);
 	return EXPERIMENT_REPEAT_NUM/sum;
 }
 
@@ -57,6 +55,8 @@ int main(int argc, char **argv)
 	struct hostent *sh;
 	struct in_addr **addrs;
 	FILE *fp;
+	ti_avg_ls = calloc(MAX_TRIAL_NUM, sizeof(float));
+	rt_avg_ls = calloc(MAX_TRIAL_NUM, sizeof(float));
 
 	if (argc != 2) {
 		printf("parameters not match");
@@ -90,53 +90,52 @@ int main(int argc, char **argv)
 	memcpy(&(ser_addr.sin_addr.s_addr), *addrs, sizeof(struct in_addr));
 	bzero(&(ser_addr.sin_zero), 8);
 
-	for (;;) {
-		printf("\ntrialnum is %d\n", trial_num);
-		for (int i = 0; i < EXPERIMENT_REPEAT_NUM; i++) {
-			//connect the socket with the host
-			//create the socket
-			sockfd = socket(AF_INET, SOCK_DGRAM, 0);           
-			if (sockfd <0)
-			{
-				printf("error in socket");
-				exit(1);
-			}                
-			
-			if((fp = fopen ("myfile.txt","r+t")) == NULL)
-			{
-				printf("File doesn't exit\n");
-				exit(0);
-			}
-			//perform the transmission and receiving
-			ti = str_cli(fp, sockfd, (struct sockaddr *)&ser_addr, sizeof(struct sockaddr_in), &len, DATALEN_ARR[trial_num]);     
-			//caculate the average transmission rate                  
-			rt = (len/(float)ti);                                         
-			printf("Time(ms) : %.3f, Data sent(byte): %d\nData rate: %f (Kbytes/s)\n", ti, (int)len, rt);
-			// sleep(5);
-			close(sockfd);
-			fclose(fp);
+	for (int j = 0; j < datalenarr_len; j++) {
+		for (int i = 0; i < errprobarr_len; i++) {
+			printf("\n>>>>>>>>>>>>> trialnum is %d, dl %d, ep %d\n", trial_num, j, i);
+			for (int k = 0; k < EXPERIMENT_REPEAT_NUM; k++) {
+				//connect the socket with the host
+				//create the socket
+				sockfd = socket(AF_INET, SOCK_DGRAM, 0);           
+				if (sockfd <0)
+				{
+					printf("error in socket");
+					exit(1);
+				}                
+				
+				if((fp = fopen ("myfile.txt","r+t")) == NULL)
+				{
+					printf("File doesn't exit\n");
+					exit(0);
+				}
+				//perform the transmission and receiving
+				ti = str_cli(fp, sockfd, (struct sockaddr *)&ser_addr, sizeof(struct sockaddr_in), &len, DATALEN_ARR[j]);     
+				//caculate the average transmission rate                  
+				rt = (len/(float)ti);                                         
+				printf("Time(ms) : %.3f, Data sent(byte): %d\nData rate: %f (Kbytes/s)\n", ti, (int)len, rt);
+				close(sockfd);
+				fclose(fp);
 
-			ti_ls[i] = ti;
-			rt_ls[i] = rt;
-
-			sleep(1);
+				ti_ls[k] = ti;
+				rt_ls[k] = rt;
+			}		
+			print_arr(ti_ls, (float)(sizeof(ti_ls))/sizeof(float));
+			print_arr(rt_ls, (float)(sizeof(rt_ls))/sizeof(float));
+			ti_avg_ls[trial_num] = mean(ti_ls);
+			rt_avg_ls[trial_num] = mean(rt_ls);
+			trial_num ++;
 		}
-		print_arr(ti_ls);
-		print_arr(rt_ls);
-		ti_avg_ls[trial_num] = mean(ti_ls);
-		rt_avg_ls[trial_num] = mean(rt_ls);
-		trial_num += 1;
-		if (trial_num == MAX_TRIAL_NUM) break; 
 	}
-//}	
 
 	printf("\n\nExperiment Results\n===================\n");
-	for (int j = 0; j < MAX_TRIAL_NUM; j++) {
-		printf(print_experiment_result, j+1, ERRPROB_ARR[j], DATALEN_ARR[j], ti_avg_ls[j], rt_avg_ls[j]);
+	for (int j = 0; j < datalenarr_len; j++) {
+		for (int i = 0; i < errprobarr_len; i++) {
+			printf(print_experiment_result, j+i+1, ERRPROB_ARR[i], DATALEN_ARR[j], ti_avg_ls[j+i], rt_avg_ls[j+i]);
+		}
 	}
 	printf("\n\nExcel Dump\n===================\n");
 	for (int j = 0; j < MAX_TRIAL_NUM; j++) {
-		printf("%.3f,%.3f\n",ti_avg_ls[j], rt_avg_ls[j]);
+		printf("%.3f          %.3f\n",ti_avg_ls[j], rt_avg_ls[j]);
 	}
 
 	exit(0);
@@ -171,10 +170,10 @@ float str_cli(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, long *le
 	gettimeofday(&sendt, NULL);							//get the current time
 	while(ci<= lsize)
 	{
-		if ((lsize+1-ci) <= DATALEN_ARR[trial_num])
+		if ((lsize+1-ci) <= datalen)
 			slen = lsize+1-ci;
 		else 
-			slen = DATALEN_ARR[trial_num];
+			slen = datalen;
 		memcpy(sends, (buf+ci), slen);
 		
 		n = sendto(sockfd, &sends, slen, 0, addr, addrlen);
@@ -192,7 +191,7 @@ float str_cli(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, long *le
 		int len = sizeof (struct sockaddr_in);
 		while (!(((ack.num == 1) && (ack.len == 0))))
 		{
-			printf("waiting for acknowledgement...\n");
+			// printf("waiting for acknowledgement...\n");
 			if ((n= recvfrom(sockfd, &ack, 2, 0, (struct sockaddr *)&addr, &len))==-1)                                   //receive the ack
 			{
 				printf("error when receiving\n");

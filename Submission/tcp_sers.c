@@ -22,17 +22,16 @@ tcp_ser.c: the source file of the server in tcp transmission
 extern int DATALEN_ARR[];
 extern float ERRPROB_ARR[];
 extern volatile int trial_num; 
-void str_ser(int sockfd, int datalen);                                                        
+void str_ser(int sockfd, int datalen, float errprob);                                                        
 int send_ack(int sockfd, struct sockaddr *addr, int addrlen);
 int compareFile(char path1[], char path2[], int * line, int * col);
 
-int is_simulated_failure() {
-	float prob = ERRPROB_ARR[trial_num];
-	printf("\nerrprob is %f\ntrialnum is %d\n", prob, trial_num);
+int is_simulated_failure(float prob) {
+	// printf("\nerrprob is %f\ntrialnum is %d\n", prob, trial_num);
 	int r = rand() % 100000;      // Returns a pseudo-random integer between 0 and 9.
 	
 	if (r < (prob * 100000)) {
-		printf("Time out due to error...\n");
+		// printf("Time out due to error...\n");
 		return 1;
 	}
 	else {
@@ -65,24 +64,21 @@ int main(void)
 	}
 
 	int count = 0;
-	while (1)
-	{
-		printf("waiting for data\n");
-
-
-		str_ser(sockfd, DATALEN_ARR[trial_num]);                                          //receive packet and response
-
-		count++;
-		if (count >= EXPERIMENT_REPEAT_NUM) {
+	for (int j = 0; j < datalenarr_len; j++) {
+		for (int i = 0; i < errprobarr_len; i++) {
+			// printf("\n>>>>>>>>>>>>> trialnum is %d, dl %d, ep %d\n", trial_num, j, i);
+			for (int k = 0; k < EXPERIMENT_REPEAT_NUM; k++) {
+				printf("waiting for data\n");
+				str_ser(sockfd, DATALEN_ARR[j], ERRPROB_ARR[i]);                                          //receive packet and response
+			}
 			trial_num++;
-			count = 0;
 		}
 	}
 	close(sockfd);
 	exit(0);
 }
 
-void str_ser(int sockfd, int datalen)
+void str_ser(int sockfd, int datalen, float errprob)
 {
 	char buf[BUFSIZE];
 	FILE *fp;
@@ -106,11 +102,11 @@ void str_ser(int sockfd, int datalen)
 	while(!end)
 	{
 		// Simulates probability of failure of transmission by (10-PROB)/10 chance of failure
-		if (is_simulated_failure()) {
+		if (is_simulated_failure(errprob)) {
 			continue;
 		}
 		printf("hi\n");
-		n= recvfrom(sockfd, &recvs, DATALEN_ARR[trial_num], 0, (struct sockaddr *)&addr, &len);
+		n= recvfrom(sockfd, &recvs, datalen, 0, (struct sockaddr *)&addr, &len);
 
 		if (n==-1)                                   //receive the packet
 		{
@@ -202,7 +198,8 @@ int compareFile(char path1[], char path2[], int * line, int * col)
         *col  += 1;
 
     } while (ch1 != EOF && ch2 != EOF);
-
+	fclose(fPtr1);
+	fclose(fPtr2);
 
     /* If both files have reached end */
     if (ch1 == EOF && ch2 == EOF)
